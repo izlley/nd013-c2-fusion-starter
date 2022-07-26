@@ -28,6 +28,8 @@ from tools.waymo_reader.simple_waymo_open_dataset_reader import dataset_pb2, lab
 
 # object detection tools and helper functions
 import misc.objdet_tools as tools
+import zlib
+from numpy.lib.function_base import percentile
 
 
 # visualize lidar point-cloud
@@ -59,22 +61,35 @@ def show_range_image(frame, lidar_name):
     print("student task ID_S1_EX1")
 
     # step 1 : extract lidar data and range image for the roof-mounted lidar
+    lidar = [data for data in frame.lasers if data.name == lidar_name][0]
     
     # step 2 : extract the range and the intensity channel from the range image
+    ri = dataset_pb2.MatrixFloat()
+    ri.ParseFromString(zlib.decompress(lidar.ri_return1.range_image_compressed))
+    ri = np.array(ri.data).reshape(ri.shape.dims)
     
     # step 3 : set values <0 to zero
+    ri[ri<0] = 0.
     
     # step 4 : map the range channel onto an 8-bit scale and make sure that the full range of values is appropriately considered
+    ri_range = ri[:,:,0]
+    ri_range = ri_range * 255 / (np.amax(ri_range) - np.amin(ri_range))
+    image_range = ri_range.astype(np.uint8)
     
     # step 5 : map the intensity channel onto an 8-bit scale and normalize with the difference between the 1- and 99-percentile to mitigate the influence of outliers
-    
+    ri_intensity = ri[:,:,1]
+    ri_intensity = 255 * np.clip(ri_intensity, percentile(ri_intensity, 1), percentile(ri_intensity, 99)) / percentile(ri_intensity, 99)
+    image_intensity = ri_intensity.astype(np.uint8)
+
     # step 6 : stack the range and intensity image vertically using np.vstack and convert the result to an unsigned 8-bit integer
+    image_range_intensity = np.vstack((image_range, image_intensity))
+    image_range_intensity = image_range_intensity.astype(np.uint8)
     
-    img_range_intensity = [] # remove after implementing all steps
+    #img_range_intensity = [] # remove after implementing all steps
     #######
     ####### ID_S1_EX1 END #######     
     
-    return img_range_intensity
+    return image_range_intensity
 
 
 # create birds-eye view of lidar data
